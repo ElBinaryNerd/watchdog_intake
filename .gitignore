@@ -1,0 +1,62 @@
+# Python-related
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment Variables
+.env
+
+# Byte-compiled / optimized / DLL files
+*.pyc
+*.pyd
+*.pyo
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+.build/
+*.egg-info/
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+pytest_cache/
+
+# MySQL and other database dumps
+*.sql
+*.sqlite3
+
+# Logs
+*.log
+*.out
+*.err
+
+# IDEs
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Linux
+*~
+*.swp
