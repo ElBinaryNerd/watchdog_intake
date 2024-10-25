@@ -13,6 +13,12 @@ class DBManager:
         self.user = os.getenv("DB_USER")
         self.password = os.getenv("DB_PASSWORD")
         self.db = os.getenv("DB_NAME")
+        
+        # Load dynamic table names from environment variables
+        self.table_domains = os.getenv("DB_TABLE_DOMAINS")
+        self.table_ips = os.getenv("DB_TABLE_IPS")
+        self.table_ns = os.getenv("DB_TABLE_NS")
+        
         self.connection = None
 
     def init_connection(self):
@@ -47,7 +53,7 @@ class DBManager:
         try:
             with self.connection.cursor() as cursor:
                 for domain in domains:
-                    sql_query = "SELECT COUNT(*) AS count FROM domains WHERE domain = %s"
+                    sql_query = f"SELECT COUNT(*) AS count FROM {self.table_domains} WHERE domain = %s"
                     cursor.execute(sql_query, (domain,))
                     result = cursor.fetchone()
                     duplicate_flags.append(result['count'] > 0)
@@ -67,10 +73,10 @@ class DBManager:
         try:
             with self.connection.cursor() as cursor:
                 for domain in domains:
-                    sql_query = "INSERT IGNORE INTO domains (domain) VALUES (%s)"
+                    sql_query = f"INSERT IGNORE INTO {self.table_domains} (domain) VALUES (%s)"
                     cursor.execute(sql_query, (domain,))
                     
-                    # If lastrowid is not 0, it means the insert was successful
+                    # If lastrowid is not  0, it means the insert was successful
                     if cursor.lastrowid:
                         inserted_domains_ids[domain] = cursor.lastrowid
                 
@@ -88,9 +94,9 @@ class DBManager:
         """
         try:
             with self.connection.cursor() as cursor:
-                sql_query = """
-                    INSERT INTO domains_ns (domain_id, ns, timestamp) 
-                    VALUES (%s, %s, NOW())
+                sql_query = f"""
+                    INSERT INTO {self.table_ns} (domain_id, ns) 
+                    VALUES (%s, %s)
                 """
                 cursor.executemany(sql_query, data)
                 self.connection.commit()
@@ -105,9 +111,9 @@ class DBManager:
         """
         try:
             with self.connection.cursor() as cursor:
-                sql_query = """
-                    INSERT INTO domains_ip (domain_id, ip, timestamp) 
-                    VALUES (%s, %s, NOW())
+                sql_query = f"""
+                    INSERT INTO {self.table_ips} (domain_id, ip) 
+                    VALUES (%s, %s)
                 """
                 cursor.executemany(sql_query, data)
                 self.connection.commit()

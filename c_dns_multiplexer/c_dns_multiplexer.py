@@ -1,11 +1,12 @@
 import aiohttp
 import asyncio
 import json
+import re
 
 class CDNSMultiplexer:
     DOH_URL = "https://cloudflare-dns.com/dns-query"
 
-    def __init__(self, semaphore_limit=500):
+    def __init__(self, semaphore_limit=2000):
         # Limit concurrent DNS resolution requests to avoid overwhelming the DNS server
         self.semaphore = asyncio.Semaphore(semaphore_limit)
 
@@ -27,17 +28,41 @@ class CDNSMultiplexer:
                     ip_data = json.loads(ip_raw)
                     ips = [answer['data'] for answer in ip_data.get('Answer', []) if answer.get('type') == 1]
 
-                    # Parse NS response
+                    # Parse NS response to include records from both Answer and Authority sections
                     ns_data = json.loads(ns_raw)
-                    nameservers = [answer['data'] for answer in ns_data.get('Answer', []) if answer.get('type') == 2]
+                    
+                    # Initialize containers for different types of nameserver information
+                    direct_nameservers = []
+                    authoritative_nameservers = []
+                    soa_nameservers = []
 
-                    return ips, nameservers
+                    # Regex to match nameserver entries without altering original content
+                    ns_regex = re.compile(r"([a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+\.)")
+
+                    # Process the Answer section for NS records
+                    for answer in ns_data.get('Answer', []):
+                        if answer.get('type') == 2:  # Direct NS type
+                            direct_nameservers.append(answer['data'])
+
+                    # Process the Authority section
+                    for authority in ns_data.get('Authority', []):
+                        if authority.get('type') == 2:  # NS type in Authority section
+                            authoritative_nameservers.append(authority['data'])
+                        elif authority.get('type') == 6:  # SOA type in Authority section
+                            # Use regex to capture all nameserver entries verbatim from SOA data
+                            soa_entries = ns_regex.findall(authority['data'])
+                            soa_nameservers.extend(soa_entries)
+
+                    # Aggregate all nameserver records, ensuring no duplicates
+                    all_nameservers = list(set(direct_nameservers + authoritative_nameservers + soa_nameservers))
+                    return ips, all_nameservers
                 else:
                     return None, None
 
         except Exception as e:
             print(f"DNS Resolution failed for domain {domain}: {e}")
             return None, None
+
 
     async def enrich_domains(self, domains_and_ids, queue_cd):
         """
@@ -63,5 +88,4 @@ class CDNSMultiplexer:
                 "ips": ips if ips else [],
                 "ns": nameservers if nameservers else []
             }
-            print(enriched_data)
             await queue_cd.put(enriched_data)

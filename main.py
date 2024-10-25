@@ -2,9 +2,16 @@ import asyncio
 from a_certs_firehose.a_certs_firehose import ACertsFirehose
 from b_certs_filtering.b_certs_filtering import BCertsFiltering
 from c_dns_multiplexer.c_dns_multiplexer import CDNSMultiplexer
+from db_manager.db_manager import DBManager 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Global database instance
+db_manager = DBManager()
+
+# Initialize the database connection once at startup
+db_manager.init_connection()
 
 # Process A: Certstream data intake
 async def process_a(queue_ab, cert_counter):
@@ -19,7 +26,7 @@ async def process_b(queue_ab, queue_bc):
         b_certs_filtering.filter(all_domains)
 
 # Process C: Enriching domains with IPs and NS using CDNSMultiplexer
-async def process_c(queue_bc, queue_cd, batch_size=800):
+async def process_c(queue_bc, queue_cd, batch_size=2000):
     c_dns_multiplexer = CDNSMultiplexer()
     while True:
         # Collect multiple items from queue_bc
@@ -33,15 +40,22 @@ async def process_c(queue_bc, queue_cd, batch_size=800):
             print(f"Processing batch of size {len(batch)}")
             await c_dns_multiplexer.enrich_domains(batch, queue_cd)
         else:
-            await asyncio.sleep(1)  # Slight pause if queue_bc is empty
+            await asyncio.sleep(0.05)  # Slight pause if queue_bc is empty
 
-# Process D: Save final value to a file
+# Process D: Save final values (IPs and NS) to the database
 async def process_d(queue_cd):
-    with open("output-asyncio.txt", "a") as f:
-        while True:
-            processed_value = await queue_cd.get()  # Consume data from queue
-            f.write(f"Processed value: {processed_value}\n")
-            f.flush()
+    while True:
+        enriched_data = await queue_cd.get()  # Consume enriched data from queue_cd
+        
+        # Extract IP and NS data to prepare for batch database insertion
+        ip_data = [(enriched_data["id"], ip) for ip in enriched_data["ips"]]
+        ns_data = [(enriched_data["id"], ns) for ns in enriched_data["ns"]]
+
+        # Insert IPs and NS records if they exist
+        if ip_data:
+            db_manager.insert_domains_ip(ip_data)
+        if ns_data:
+            db_manager.insert_domains_ns(ns_data)
 
 # Process E: Display queue sizes and certs received per second
 async def process_e(queue_ab, queue_bc, queue_cd, cert_counter):
@@ -54,7 +68,7 @@ async def process_e(queue_ab, queue_bc, queue_cd, cert_counter):
 async def main():
     # Initialize queues and counters
     queue_ab = asyncio.Queue(maxsize=1000)
-    queue_bc = asyncio.Queue(maxsize=1000)
+    queue_bc = asyncio.Queue(maxsize=2000)
     queue_cd = asyncio.Queue(maxsize=1000)
     cert_counter = [0]
 

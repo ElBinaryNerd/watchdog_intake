@@ -29,14 +29,13 @@ class ACertsFirehose:
         self.event_count += 1
         self.cert_counter[0] += 1  # Increment cert counter
 
-        if self.event_count % 200 == 0:  # Limit data flow to prevent overflow during testing
-            leaf_cert = message['data'].get('leaf_cert', {})
-            not_before = leaf_cert.get('not_before')
-            not_after = leaf_cert.get('not_after')
+        leaf_cert = message['data'].get('leaf_cert', {})
+        not_before = leaf_cert.get('not_before')
+        not_after = leaf_cert.get('not_after')
 
-            # Process only those with the required validity time
-            if (not_after - not_before) < self.cert_max_validity:
-                self.queue_ab.put_nowait(leaf_cert.get('all_domains', []))
+        # Process only those with the required validity time
+        if (not_after - not_before) < self.cert_max_validity:
+            self.queue_ab.put_nowait(leaf_cert.get('all_domains', []))
 
     async def start_listening(self):
         """

@@ -1,3 +1,5 @@
+output-asyncio.txt
+
 # Python-related
 __pycache__/
 *.py[cod]
