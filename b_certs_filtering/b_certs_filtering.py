@@ -5,18 +5,20 @@ from dictionary.domain_tld import get_tld_blacklist
 from db_manager.db_manager import DBManager
 
 class BCertsFiltering:
-    def __init__(self, queue_ab, queue_bc, db_manager):
-        self.queue_ab = queue_ab
+    def __init__(self, queue_bc):
         self.queue_bc = queue_bc
         self.db_manager = DBManager()
+        self.db_manager.init_connection()
         self.loop = asyncio.get_running_loop()
 
     def filter(self, domains_to_filter):
         domains_filtered = self._filter_multidomains(domains_to_filter)
         domains_filtered = self._filter_restricted_tlds(domains_filtered)
         domains_filtered = self._filter_wildcard_and_duplicates(domains_filtered)
-        # inserted_domains_ids = self._filter_duplicates(domains_filtered)
-        self.queue_bc.put_nowait(domains_filtered)
+        domains_filtered = self._filter_service_based_subdomains(domains_filtered)
+        inserted_domains_ids = self._filter_duplicates(domains_filtered)
+        if inserted_domains_ids is not None and len(inserted_domains_ids) > 0:
+            self.queue_bc.put_nowait(inserted_domains_ids)
 
     # Multi-level subdomain filter
     def _filter_multidomains(self, domains_in):
@@ -65,6 +67,15 @@ class BCertsFiltering:
     def _filter_duplicates(self, domains_in):
         """
         Check duplicates by querying the database synchronously.
+        Returns a dictionary of domains (keys) and their corresponding ids in the database (values).
         """
-        inserted_domains_ids = self.db_manager.insert_non_duplicates(domains_in)
+        # Filter out any empty or None values from domains_in
+        valid_domains = [domain for domain in domains_in if domain]
+        
+        # If no valid domains remain, return an empty dictionary immediately
+        if not valid_domains:
+            return {}
+
+        # Use the async_to_sync helper to run the async method
+        inserted_domains_ids = self.db_manager.insert_non_duplicates(valid_domains)
         return inserted_domains_ids

@@ -36,7 +36,6 @@ class ACertsFirehose:
 
             # Process only those with the required validity time
             if (not_after - not_before) < self.cert_max_validity:
-                print(f"Certstream event {self.event_count}")
                 self.queue_ab.put_nowait(leaf_cert.get('all_domains', []))
 
     async def start_listening(self):
