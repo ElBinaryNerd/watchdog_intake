@@ -5,8 +5,13 @@ from b_certs_filtering.b_certs_filtering import BCertsFiltering
 from c_dns_multiplexer.c_dns_multiplexer import CDNSMultiplexer
 from db_manager.db_manager import DBManager
 from dotenv import load_dotenv
+from pulsar_producer.pulsar_producer import PulsarProducer
+import json
 
 load_dotenv()
+
+# Global Pulsar producer instance
+pulsar_producer = PulsarProducer()
 
 # Global database instance
 db_manager = DBManager()
@@ -64,6 +69,9 @@ async def process_c(queue_bc, queue_cd, batch_size=4000):
 
 # Process D: Save final values (IPs and NS) to the database
 async def process_d(queue_cd):
+    """
+    Process D: Enriches domain data with IPs and NS, then sends the domain and ID to Pulsar.
+    """
     while True:
         enriched_data = await queue_cd.get()  # Consume enriched data from queue_cd
         
@@ -76,6 +84,16 @@ async def process_d(queue_cd):
             db_manager.insert_domains_ip(ip_data)
         if ns_data:
             db_manager.insert_domains_ns(ns_data)
+
+        # Send domain and id to Pulsar
+        try:
+            domain_message = json.dumps({
+                "id": enriched_data["id"],
+                "domain": enriched_data["domain"]
+            })
+            pulsar_producer.send(domain_message)
+        except Exception as e:
+            print(f"Failed to send to Pulsar: {e}")
 
 
 # Process E: Display statistics for queue sizes and domain counts per second (5-minute rolling average)
