@@ -26,21 +26,20 @@ async def process_b(queue_ab, queue_bc):
         b_certs_filtering.filter(all_domains)
 
 # Process C: Enriching domains with IPs and NS using CDNSMultiplexer
-async def process_c(queue_bc, queue_cd, batch_size=2000):
+async def process_c(queue_bc, queue_cd, batch_size=4000):
     c_dns_multiplexer = CDNSMultiplexer()
     while True:
-        # Collect multiple items from queue_bc
         batch = {}
+
+        # Collect exactly batch_size items from queue_bc
         for _ in range(batch_size):
-            if not queue_bc.empty():
-                domains_and_ids = await queue_bc.get()
-                batch.update(domains_and_ids)
-        
-        if batch:
-            print(f"Processing batch of size {len(batch)}")
-            await c_dns_multiplexer.enrich_domains(batch, queue_cd)
-        else:
-            await asyncio.sleep(0.05)  # Slight pause if queue_bc is empty
+            domains_and_ids = await queue_bc.get()  # Waits for each item, blocking until it’s available
+            batch.update(domains_and_ids)
+            queue_bc.task_done()  # Mark item as processed for queue size tracking
+
+        # Process the batch once the exact batch size is reached
+        print(f"Processing batch of size {len(batch)}")
+        await c_dns_multiplexer.enrich_domains(batch, queue_cd)
 
 # Process D: Save final values (IPs and NS) to the database
 async def process_d(queue_cd):
@@ -68,7 +67,7 @@ async def process_e(queue_ab, queue_bc, queue_cd, cert_counter):
 async def main():
     # Initialize queues and counters
     queue_ab = asyncio.Queue(maxsize=1000)
-    queue_bc = asyncio.Queue(maxsize=2000)
+    queue_bc = asyncio.Queue(maxsize=50000)
     queue_cd = asyncio.Queue(maxsize=1000)
     cert_counter = [0]
 
