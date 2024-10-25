@@ -31,5 +31,5 @@ This project is a high-performance, asynchronous pipeline for processing and enr
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-username/your-repo-name.git
-   cd your-repo-name
+   git clone https://github.com/ElBinaryNerd/watchdog_intake.git
+   cd watchdog_intake
